@@ -6,6 +6,6 @@ public class FirstMod : BaseUnityPlugin
 {
     void Awake()
     {
-        Logger.LogInfo("Hello, Luma Island! My mod is loaded!");
+        Logger.LogInfo("Hello, Luma Island! My mod is now loaded, yea!");
     }
 }
