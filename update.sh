@@ -2,7 +2,7 @@
 
 declare -A MODS=(
     ["/e/Programming/CS/LumaMods/LumaMods/bin/Debug/LumaMods.dll"]="/e/SteamLibrary/steamapps/common/Luma Island/BepInEx/plugins/LumaMods.dll"
-    ["/e/Programming/CS/LumaMods/OneHitWonder/bin/Debug/net8.0/OneHitWonder.dll"]="/e/SteamLibrary/steamapps/common/Luma Island/BepInEx/plugins/OneHitWonder.dll"
+    ["/e/Programming/CS/LumaMods/OneHitWonder/bin/Debug/OneHitWonder.dll"]="/e/SteamLibrary/steamapps/common/Luma Island/BepInEx/plugins/OneHitWonder.dll"
 )
 
 INTERVAL=1 # In seconds

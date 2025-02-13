@@ -12,9 +12,9 @@ public class OneHitWonder : BaseUnityPlugin
     [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0051:Remove unused private members")]
     void Awake()
     {
+        Logger.LogInfo("One hit wonder mod loaded.");
         Harmony harmony = new Harmony("cz.kajacx.lumamods.onehitwonder");
         harmony.PatchAll();
-        Logger.LogInfo("One hit wonder mod loaded.");
         logger = Logger;
     }
 }
