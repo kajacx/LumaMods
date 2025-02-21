@@ -1,24 +1,40 @@
 ﻿using BepInEx;
+using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
-using System.Security.Policy;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 [BepInPlugin("com.yourname.lumaisland.firstmod", "First Luma Island Mod", "1.0.0")]
 public class FirstMod : BaseUnityPlugin
 {
+    public static ConfigEntry<bool> enable;
+    public static ConfigEntry<string> quickStackWhitelist;
+
+    public static readonly List<string> knownEntities = new List<string>()
+    {
+        "SimpleChest", "FeedingTrough"
+    };
+
     public static ManualLogSource logger = null;
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0051:Remove unused private members", Justification = "<Pending>")]
     void Awake()
     {
+        Logger.LogInfo("Luma island first mod awake start.");
+
+        logger = Logger;
+
+        enable = Config.Bind("General", "Enable the mod", true, "Set to false to disable this mod.");
+        quickStackWhitelist = Config.Bind("General", "Whitelist", "SimpleChest", "Comma-separated list of entities to quickstack into. Available values: " + knownEntities.Join());
+
         Harmony harmony = new Harmony("com.yourname.lumaisland.mod");
         harmony.PatchAll();
-        Logger.LogInfo("Hello, Luma Island! My mod is now loaded, yea!");
-        logger = Logger;
+
+        Logger.LogInfo("Luma island first mod awake end.");
     }
 
     public static void LogInfo(string message)
@@ -65,52 +81,16 @@ class Patch_Inventory_Sort
     [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0051:Remove unused private members", Justification = "<Pending>")]
     static bool Prefix(Inventory __instance, IComparer<ItemStack> order, bool excludeHotbar = true)
     {
-        if (Keyboard.current.shiftKey.isPressed)
-        {
-            FirstMod.LogInfo("Shift PRESSED yes");
-        }
-        else
-        {
-            FirstMod.LogInfo("Shift NOT PRESSED");
-            return true; // run original method
-        }
+        if (!Keyboard.current.shiftKey.isPressed) return true; // run original method
 
         var player = __instance.Player;
-        FirstMod.LogInfo("Player: " + player);
-        if (!FirstMod.GetPrivateField(__instance, "m_items", out ItemStack[] items))
-        {
-            return true; // run original method
-        }
-
-        //if (!FirstMod.GetPrivateField(player.Level, "m_data", out TileData[,] m_data))
-        //{
-        //    return true; // run original method
-        //}
-
-        //FirstMod.ForEach2(m_data, (obj, x, y) =>
-        //{
-        //    if (obj != null)
-        //    {
-        //        FirstMod.LogInfo(obj.ToString());
-        //    }
-        //    else
-        //    {
-        //        FirstMod.LogInfo("null m_data at" + x + " " + y);
-        //    }
-        //});
-
-        if (!FirstMod.GetPrivateField(player.Level, "m_gameObjects", out TileOccupier[,] m_gameObjects))
-        {
-            return true; // run original method
-        }
+        if (!FirstMod.GetPrivateField(__instance, "m_items", out ItemStack[] items)) return true;
+        if (!FirstMod.GetPrivateField(player.Level, "m_gameObjects", out TileOccupier[,] m_gameObjects)) return true;
 
         FirstMod.LogInfo("Patch_Inventory_Sort ForEach2");
         FirstMod.ForEach2(m_gameObjects, (obj, x, y) =>
         {
-            if (obj == null) return;
-
-            var storage = obj.GetComponent<GenericStorageBox>();
-            if (storage == null) return;
+            if (!TryGetStorage(obj, out var storage)) return;
 
             var inventory = storage.Inventory;
             if (inventory == null) return;
@@ -130,6 +110,48 @@ class Patch_Inventory_Sort
 
         FirstMod.LogInfo("Patch_Inventory_Sort finished");
         return true; // run original method
+    }
+
+    static bool TryGetStorage(TileOccupier occupier, out GenericStorageBox storage)
+    {
+        storage = null;
+        if (occupier == null) return false;
+
+        var whitelistedNames = GetWhitelistedNames();
+        string name = GetOccupierName(occupier);
+
+        if (!whitelistedNames.Contains(name)) return false;
+
+        storage = occupier.GetComponent<GenericStorageBox>();
+        if (storage == null && FirstMod.knownEntities.Contains(name)) {
+            FirstMod.LogInfo($"Known entity with name '{name}' doesn't have a GenericStorageBox. This shouldn't happen, please contact the mod author.");
+            return false;
+        }
+
+        return true;
+    }
+
+    static HashSet<string> unknownWarningShown = new HashSet<string>();
+    static List<string> GetWhitelistedNames()
+    {
+        List<string> names = FirstMod.quickStackWhitelist.Value.Split(',').Select(name => name.Trim()).Where(name => !name.IsNullOrEmpty()).ToList();
+
+        foreach (string name in names)
+        {
+            if (!FirstMod.knownEntities.Contains(name) && !unknownWarningShown.Contains(name)) {
+                FirstMod.LogInfo($"Unknown entity: '{name}', known names are: " + FirstMod.knownEntities.Join());
+                unknownWarningShown.Add(name);
+            }
+        }
+
+        //FirstMod.LogInfo("NAMES: " + names.Join());
+
+        return names;
+    }
+
+    static string GetOccupierName(TileOccupier occupier)
+    {
+        return occupier.name.Replace("(Clone)", "");
     }
 }
 
