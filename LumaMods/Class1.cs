@@ -78,13 +78,15 @@ public class FirstMod : BaseUnityPlugin
 [HarmonyPatch(typeof(Inventory), "Sort")]
 class Patch_Inventory_Sort
 {
+    static List<string> whitelistedNames = GetWhitelistedNames();
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("CodeQuality", "IDE0051:Remove unused private members", Justification = "<Pending>")]
     static bool Prefix(Inventory __instance, IComparer<ItemStack> order, bool excludeHotbar = true)
     {
         if (!Keyboard.current.shiftKey.isPressed) return true; // run original method
 
         var player = __instance.Player;
-        if (!FirstMod.GetPrivateField(__instance, "m_items", out ItemStack[] items)) return true;
+        if (!FirstMod.GetPrivateField(__instance, "m_items", out ItemStack[] playerItems)) return true;
         if (!FirstMod.GetPrivateField(player.Level, "m_gameObjects", out TileOccupier[,] m_gameObjects)) return true;
 
         FirstMod.LogInfo("Patch_Inventory_Sort ForEach2");
@@ -99,13 +101,38 @@ class Patch_Inventory_Sort
 
             if (!FirstMod.GetPrivateField(inventory, "m_items", out ItemStack[] chestItems)) return;
 
-            foreach (ItemStack item in chestItems)
+            List<ItemStack> toRemove = new List<ItemStack>();
+            foreach (ItemStack chestItem in chestItems.Where(item => item != null))
             {
-                if (item != null)
+                FirstMod.LogInfo($"{chestItem}: {chestItem.item} - {chestItem.amount}");
+
+                foreach (var playerItem in playerItems.Where(item => item != null))
                 {
-                    FirstMod.LogInfo($"{item}: {item.item} - {item.amount}");
+                    FirstMod.LogInfo($"Comparing {playerItem.item.GetDescriptiveName()}");
+                    if (playerItem.item == chestItem.item)
+                    {
+                        FirstMod.LogInfo($"Found MATCH!!!");
+                        chestItem.amount += playerItem.amount;
+                        playerItem.amount = 0;
+                        toRemove.Add(playerItem);
+                    }
+                    else if (playerItem.item.GetDescriptiveName() == chestItem.item.GetDescriptiveName())
+                    {
+                        FirstMod.LogInfo($"Found GetDescriptiveName MATCH!!!");
+                        chestItem.amount += playerItem.amount;
+                        playerItem.amount = 0;
+                        toRemove.Add(playerItem);
+                    }
                 }
             }
+
+            foreach (var item in toRemove)
+            {
+                playerItems[Array.IndexOf(playerItems, item)] = null;
+                //__instance.OnChange?.Invoke(item); // TODO:
+            }
+            __instance.OnInventoryUpdated?.Invoke();
+            __instance.OnSorted?.Invoke();
         });
 
         FirstMod.LogInfo("Patch_Inventory_Sort finished");
@@ -117,13 +144,13 @@ class Patch_Inventory_Sort
         storage = null;
         if (occupier == null) return false;
 
-        var whitelistedNames = GetWhitelistedNames();
         string name = GetOccupierName(occupier);
 
         if (!whitelistedNames.Contains(name)) return false;
 
         storage = occupier.GetComponent<GenericStorageBox>();
-        if (storage == null && FirstMod.knownEntities.Contains(name)) {
+        if (storage == null && FirstMod.knownEntities.Contains(name))
+        {
             FirstMod.LogInfo($"Known entity with name '{name}' doesn't have a GenericStorageBox. This shouldn't happen, please contact the mod author.");
             return false;
         }
@@ -138,7 +165,8 @@ class Patch_Inventory_Sort
 
         foreach (string name in names)
         {
-            if (!FirstMod.knownEntities.Contains(name) && !unknownWarningShown.Contains(name)) {
+            if (!FirstMod.knownEntities.Contains(name) && !unknownWarningShown.Contains(name))
+            {
                 FirstMod.LogInfo($"Unknown entity: '{name}', known names are: " + FirstMod.knownEntities.Join());
                 unknownWarningShown.Add(name);
             }
@@ -164,7 +192,7 @@ class Patch_PlayerInventoryPanel_OnCreate
         FirstMod.LogInfo("Postfix start");
 
         var sortButtonField = AccessTools.Field(typeof(PlayerInventoryPanel), "m_sortButton");
-        ButtonWidget sortButton = (ButtonWidget) sortButtonField.GetValue(__instance);
+        ButtonWidget sortButton = (ButtonWidget)sortButtonField.GetValue(__instance);
 
         // This runs *after* the original Start() method
         ButtonWidget quickStackButton = GameObject.Instantiate(sortButton);
